@@ -32,7 +32,10 @@ parse_csv = (content) ->
 
           i++
 
-        results[id].push if first is last then first else (if first then 0 else '')
+        results[id].push if first && (first is last)
+          first
+        else
+          if first then 0 else ''
   else
 
   ret = ''

@@ -36,7 +36,7 @@ parse_csv = function(content) {
           }
           i++;
         }
-        results[id].push(first === last ? first : (first ? 0 : ''));
+        results[id].push(first && (first === last) ? first : first ? 0 : '');
       }
     }
   } else {
