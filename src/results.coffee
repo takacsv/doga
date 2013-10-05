@@ -8,7 +8,7 @@ splitLine = (line) ->
   line.split /,/g
 
 parseResponseId = (id) ->
-  if m = id.match /\/(\w+)\.pdf/
+  if m = id.match /\/?(\w+)\.pdf/
     m[1]
   else
     $.error "Unable to parse response id '#{id}'"
@@ -18,7 +18,6 @@ parse_csv = (content) ->
   lines = content?.split /\r\n|\r|\n/g
   lines = _.filter lines, (l) -> l?.length
 
-  console.log lines
   if lines.length
     header = lines.shift()
     header = splitLine header
@@ -29,7 +28,6 @@ parse_csv = (content) ->
       solutions = splitLine lines[0]
       for field, i in header
         f = parseFieldName field
-        console.log 'Field Name: ' + field + ' -> ' + f
         ret[f] = solutions[i]
     else
       # this must be a responses csv
@@ -46,7 +44,8 @@ parse_csv = (content) ->
         else
           $.error "Something is wrong with line: '#{line}'"
 
-  console.log 'CSV: ' + JSON.stringify ret, null, 2
+  # console.log 'CSV: ' + JSON.stringify ret, null, 2
+
   ret
 
 calcResults = (sol, resp) ->
@@ -60,13 +59,13 @@ calcResults = (sol, resp) ->
       else
         0
 
-  console.log 'RESULTS: ' + JSON.stringify ret, null, 2
+  # console.log 'RESULTS: ' + JSON.stringify ret, null, 2
 
   ret
 
 transformResults = (result) ->
   # for an individual resultset
-  console.log 'IN: ' + JSON.stringify result
+  # console.log 'IN: ' + JSON.stringify result
 
   quests = _.map(_.sortBy(_.keys(result), (k) ->
     parseInt k.match(/\d+/)[0]),
@@ -77,7 +76,7 @@ transformResults = (result) ->
     quests  : _.map(quests, (q, i) -> { q: q, i: i+1 })
     correct : correct.length
 
-  console.log 'transformResults: ' + JSON.stringify ret, null, 2
+  # console.log 'transformResults: ' + JSON.stringify ret, null, 2
 
   ret
 
@@ -110,7 +109,47 @@ savePdf = (name, content) ->
   doc.fromHTML($tmp.get(0), 15, 15,
     width           : 'auto',
     elementHandlers : -> true)
+
+  # TODO: put test first
+  pagesPre = getData('pdfs_pages')?[name]
+  if pagesPre
+    for page in pagesPre
+      doc.addPage()
+      doc.addImage page, 'JPEG', 0, 0
+
   doc.save name + '.pdf'
+
+_renderPDFPage = (id, pdf, num, finished) ->
+  if pdf.numPages < num
+    finished?.call(@)
+    return
+
+  canvas = $('.canvas').get(0)
+  pdf.getPage(num).then getPage = (page) ->
+    scale = 1
+    viewport = page.getViewport(1)
+    context = canvas.getContext("2d")
+    canvas.height = viewport.height
+    canvas.width = viewport.width
+
+    renderContext =
+      canvasContext : context
+      viewport      : viewport
+
+    page.render(renderContext).then ->
+      pages = getData 'pdfs_pages'
+      pages[id].push canvas.toDataURL 'image/jpeg'
+      setData 'pdfs_pages', pages
+      _renderPDFPage id, pdf, num+1, finished
+
+
+slurpPDF = (id, source, finished) ->
+  PDFJS.getDocument(new Uint8Array(source)).then (pdf) ->
+    pdfs_pages = getData 'pdfs_pages'
+    pdfs_pages ?= {}
+    pdfs_pages[id] = []
+    setData 'pdfs_pages', pdfs_pages
+    _renderPDFPage id, pdf, 1, finished
 
 
 __internal = {}
@@ -133,28 +172,76 @@ $(document).ready =>
     $tgt = $(e.target)
 
     reader = new FileReader()
-    reader.onload = ->
-      console.log 'read ready: ' + event.target.result
+    if files.length
+      pdfs = _.filter files, (f) -> f.type.match /pdf/
+      other = _.filter files, (f) -> !f.type.match /pdf/
 
-      csv = parse_csv event.target.result
-      if $tgt.hasClass solutionClass
-        setData 'solution', csv
-        $('.solution').html 'Got it.'
-      else if $tgt.hasClass responsesClass
-        setData 'responses', csv
-        $('.responses').html 'Got it.'
+      if pdfs.length
+        for pdf in pdfs
+          reader = new FileReader()
+          filename = parseResponseId pdf.name
+          console.log 'onload def'
+          reader.onload = ->
+            console.log "filename: #{filename}"
+            dataPdfs = getData 'pdfs'
+            dataPdfs ?= {}
+            console.log 'LEN: ' + @result?.length
+            dataPdfs[filename] = @result
+            setData 'pdfs', dataPdfs
+            slurpPDF filename, @result
+            console.log 'dataPdf: ' + JSON.stringify _.keys(dataPdfs), null, 2
 
-      solution = getData('solution')
-      responses = getData('responses')
-      if solution && responses
-        setData 'results', calcResults solution, responses
+          # reader.onload = ((theFile) ->
+          #   filename = parseResponseId theFile.name
+          #   console.log 'HURKA: ' + @result?.length
+          #   (e) =>
+          #     dataPdfs = getData 'pdfs'
+          #     dataPdfs ?= {}
+          #     console.log 'LEN: ' + @result?.length
+          #     dataPdfs[filename] = @result
+          #     console.log 'dataPdf: ' + JSON.stringify _.keys(dataPdfs), null, 2
+          #     setData 'pdfs', dataPdfs
+          # )(pdf)
 
-        results = getData 'results'
-        for k of results
-          savePdf k, renderResults(k, results[k])
+          reader.readAsArrayBuffer pdf
 
-    reader.readAsText files[0]
-    # console.log files
-    # if files.length && _.filter(files, (f) -> f.type.match /pdf/).length
+      if other.length
+        for o in other
+          reader = new FileReader()
+          reader.onload = ->
+            # console.log 'read ready: ' + event.target.result
+
+            csv = parse_csv event.target.result
+            if $tgt.hasClass solutionClass
+              setData 'solution', csv
+              $('.solution').html 'Got it.'
+            else if $tgt.hasClass responsesClass
+              setData 'responses', csv
+              $('.responses').html 'Got it.'
+
+            solution = getData 'solution'
+            responses = getData 'responses'
+
+            if solution && responses
+              setData 'results', calcResults solution, responses
+
+              results = getData 'results'
+              pdfs = getData 'pdfs'
+              for k of results
+                save = ->
+                  console.log 'save: ' + k
+                  savePdf k, renderResults(k, results[k])
+                console.log 'save for ' + k
+                console.log 'has pdf: ' + !!pdfs[k]
+                console.log 'pdfs: ' + JSON.stringify _.keys(pdfs), null, 2
+                savePdf k, renderResults(k, results[k])
+                # if pdfs?[k]
+                #   console.log 'slurpPDF: ' + k
+                #   # slurpPDF k, pdfs[k], save
+                #   slurpPDF k, pdfs[k]
+                # else
+                #   save()
+
+          reader.readAsText o
 
     false
