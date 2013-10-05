@@ -41,6 +41,7 @@ parse_csv = (content) ->
 
           for hdr_field, j in header
             f = parseFieldName hdr_field
+            continue if f is 'formid'
             ret[resp_id][f] = ln_flds[j]
         else
           $.error "Something is wrong with line: '#{line}'"
@@ -62,6 +63,55 @@ calcResults = (sol, resp) ->
   console.log 'RESULTS: ' + JSON.stringify ret, null, 2
 
   ret
+
+transformResults = (result) ->
+  # for an individual resultset
+  console.log 'IN: ' + JSON.stringify result
+
+  quests = _.map(_.sortBy(_.keys(result), (k) ->
+    parseInt k.match(/\d+/)[0]),
+      (ans) -> parseInt(result[ans]))
+
+  correct = _.filter quests, (q) -> q
+  ret =
+    quests  : _.map(quests, (q, i) -> { q: q, i: i+1 })
+    correct : correct.length
+
+  console.log 'transformResults: ' + JSON.stringify ret, null, 2
+
+  ret
+
+renderResults = (id, results) ->
+  tResults = transformResults results
+  data =
+    id      : id
+    results : tResults.quests
+    correct : tResults.correct
+
+  tpl = Hogan.compile '<div>
+                         <div>ID: {{id}} [{{correct}} pt(s)]</div>
+                           <ul>
+                           {{#results}}
+                             <li>{{i}}.: <b>{{q}}</b> pont</li>
+                           {{/results}} 
+                           </ul>
+                           <b>
+                             <div>Pontszam: {{correct}}</div>
+                             </div>Ertekeles:<div>
+                           </b>
+                         </div>
+                       </div>'
+  tpl.render data
+
+savePdf = (name, content) ->
+  $tmp = $('.tmp')
+  $tmp.html content
+  doc = new jsPDF()
+  doc.fromHTML($tmp.get(0), 15, 15,
+    width           : 'auto',
+    elementHandlers : -> true)
+  doc.save name + '.pdf'
+
 
 __internal = {}
 setData = (k,v) ->
@@ -89,12 +139,22 @@ $(document).ready =>
       csv = parse_csv event.target.result
       if $tgt.hasClass solutionClass
         setData 'solution', csv
+        $('.solution').html 'Got it.'
       else if $tgt.hasClass responsesClass
         setData 'responses', csv
+        $('.responses').html 'Got it.'
 
-      if getData('solution') && getData('responses')
-        calcResults(getData('solution'), getData('responses'))
+      solution = getData('solution')
+      responses = getData('responses')
+      if solution && responses
+        setData 'results', calcResults solution, responses
+
+        results = getData 'results'
+        for k of results
+          savePdf k, renderResults(k, results[k])
 
     reader.readAsText files[0]
+    # console.log files
+    # if files.length && _.filter(files, (f) -> f.type.match /pdf/).length
 
     false

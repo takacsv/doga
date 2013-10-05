@@ -1,4 +1,4 @@
-var calcResults, getData, parseFieldName, parseResponseId, parse_csv, responsesClass, setData, solutionClass, splitLine, __internal;
+var calcResults, getData, parseFieldName, parseResponseId, parse_csv, renderResults, responsesClass, savePdf, setData, solutionClass, splitLine, transformResults, __internal;
 var _this = this;
 
 parseFieldName = function(field) {
@@ -53,6 +53,7 @@ parse_csv = function(content) {
           for (j = 0, _len3 = header.length; j < _len3; j++) {
             hdr_field = header[j];
             f = parseFieldName(hdr_field);
+            if (f === 'formid') continue;
             ret[resp_id][f] = ln_flds[j];
           }
         } else {
@@ -76,6 +77,68 @@ calcResults = function(sol, resp) {
   }
   console.log('RESULTS: ' + JSON.stringify(ret, null, 2));
   return ret;
+};
+
+transformResults = function(result) {
+  var correct, quests, ret;
+  console.log('IN: ' + JSON.stringify(result));
+  quests = _.map(_.sortBy(_.keys(result), function(k) {
+    return parseInt(k.match(/\d+/)[0]);
+  }), function(ans) {
+    return parseInt(result[ans]);
+  });
+  correct = _.filter(quests, function(q) {
+    return q;
+  });
+  ret = {
+    quests: _.map(quests, function(q, i) {
+      return {
+        q: q,
+        i: i + 1
+      };
+    }),
+    correct: correct.length
+  };
+  console.log('transformResults: ' + JSON.stringify(ret, null, 2));
+  return ret;
+};
+
+renderResults = function(id, results) {
+  var data, tResults, tpl;
+  tResults = transformResults(results);
+  data = {
+    id: id,
+    results: tResults.quests,
+    correct: tResults.correct
+  };
+  tpl = Hogan.compile('<div>\
+                         <div>ID: {{id}} [{{correct}} pt(s)]</div>\
+                           <ul>\
+                           {{#results}}\
+                             <li>{{i}}.: <b>{{q}}</b> pont</li>\
+                           {{/results}} \
+                           </ul>\
+                           <b>\
+                             <div>Pontszam: {{correct}}</div>\
+                             </div>Ertekeles:<div>\
+                           </b>\
+                         </div>\
+                       </div>');
+  return tpl.render(data);
+};
+
+savePdf = function(name, content) {
+  var $tmp, doc;
+  $tmp = $('.tmp');
+  $tmp.html(content);
+  doc = new jsPDF();
+  doc.fromHTML($tmp.get(0), 15, 15, {
+    width: 'auto',
+    elementHandlers: function() {
+      return true;
+    }
+  });
+  return doc.save(name + '.pdf');
 };
 
 __internal = {};
@@ -107,16 +170,26 @@ $(document).ready(function() {
     $tgt = $(e.target);
     reader = new FileReader();
     reader.onload = function() {
-      var csv;
+      var csv, k, responses, results, solution, _results;
       console.log('read ready: ' + event.target.result);
       csv = parse_csv(event.target.result);
       if ($tgt.hasClass(solutionClass)) {
         setData('solution', csv);
+        $('.solution').html('Got it.');
       } else if ($tgt.hasClass(responsesClass)) {
         setData('responses', csv);
+        $('.responses').html('Got it.');
       }
-      if (getData('solution') && getData('responses')) {
-        return calcResults(getData('solution'), getData('responses'));
+      solution = getData('solution');
+      responses = getData('responses');
+      if (solution && responses) {
+        setData('results', calcResults(solution, responses));
+        results = getData('results');
+        _results = [];
+        for (k in results) {
+          _results.push(savePdf(k, renderResults(k, results[k])));
+        }
+        return _results;
       }
     };
     reader.readAsText(files[0]);

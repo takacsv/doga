@@ -3,6 +3,8 @@
   <title>doga</title>
   <script src="http://code.jquery.com/jquery-2.0.3.min.js"></script>
   <script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.4/underscore-min.js"></script>
+  <script src="http://cdnjs.cloudflare.com/ajax/libs/hogan.js/2.0.0/hogan.js"></script>
+  <script src="js/libs/jspdf.min.js"></script>
   <script src="js/results.js"></script>
   <style>
     .droparea {
@@ -14,6 +16,9 @@
     .solution, .responses {
       height: 60px;
       }
+    .tests, .tmp {
+      display: none;
+      }
   </style>
 </head>
 <body>
@@ -21,5 +26,6 @@ Here comes the show.
 <div class="droparea solution">Drop solution csv here</div>
 <div class="droparea responses">Drop responses csv here</div>
 <div class="droparea tests">Drop filled out test pdfs here</div>
+<div class="tmp"></div>
 </body>
 </html>
