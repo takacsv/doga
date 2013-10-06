@@ -106,16 +106,16 @@ savePdf = (name, content) ->
   $tmp = $('.tmp')
   $tmp.html content
   doc = new jsPDF()
-  doc.fromHTML($tmp.get(0), 15, 15,
-    width           : 'auto',
-    elementHandlers : -> true)
 
-  # TODO: put test first
   pagesPre = getData('pdfs_pages')?[name]
   if pagesPre
     for page in pagesPre
-      doc.addPage()
       doc.addImage page, 'JPEG', 0, 0
+      doc.addPage()
+
+  doc.fromHTML($tmp.get(0), 15, 15,
+    width           : 'auto',
+    elementHandlers : -> true)
 
   doc.save name + '.pdf'
 
@@ -126,8 +126,8 @@ _renderPDFPage = (id, pdf, num, finished) ->
 
   canvas = $('.canvas').get(0)
   pdf.getPage(num).then getPage = (page) ->
-    scale = 1
-    viewport = page.getViewport(1)
+    scale = 1.3
+    viewport = page.getViewport(scale)
     context = canvas.getContext("2d")
     canvas.height = viewport.height
     canvas.width = viewport.width
