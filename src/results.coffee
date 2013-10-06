@@ -13,8 +13,9 @@ parseResponseId = (id) ->
   else
     $.error "Unable to parse response id '#{id}'"
 
-parse_csv = (content) ->
+parseCSV = (content) ->
   ret = {}
+  type = null
   lines = content?.split /\r\n|\r|\n/g
   lines = _.filter lines, (l) -> l?.length
 
@@ -23,14 +24,16 @@ parse_csv = (content) ->
     header = splitLine header
 
     fields = {}
-    if lines.length == 1
+    if lines.length == 1 && !lines[0].match /formid/
       # this must be a solution csv
+      type = 'solution'
       solutions = splitLine lines[0]
       for field, i in header
         f = parseFieldName field
         ret[f] = solutions[i]
     else
       # this must be a responses csv
+      type = 'responses'
       for line, i in lines
         ln_flds = splitLine line
         if ln_flds.length
@@ -46,7 +49,9 @@ parse_csv = (content) ->
 
   # console.log 'CSV: ' + JSON.stringify ret, null, 2
 
-  ret
+  csv =
+    type : type
+    csv  : ret
 
 calcResults = (sol, resp) ->
   ret = {}
@@ -152,12 +157,61 @@ slurpPDF = (id, source, finished) ->
     _renderPDFPage id, pdf, 1, finished
 
 
+runInputFiles = (finished) ->
+  inputFiles = getData 'inputFiles'
+  if inputFiles.length
+    file = inputFiles.pop()
+    $('.status').html "Processing file '#{file.name}' (#{inputFiles.length} more left) ..."
+    if file.type.match /pdf/
+      reader = new FileReader()
+      filename = parseResponseId file.name
+      reader.onload = ->
+        dataPdfs = getData 'pdfs'
+        dataPdfs ?= {}
+        dataPdfs[filename] = @result
+        setData 'pdfs', dataPdfs
+        slurpPDF filename, @result, ->
+          runInputFiles finished
+
+      reader.readAsArrayBuffer file
+    else
+      reader = new FileReader()
+      reader.onload = ->
+        csv = parseCSV event.target.result
+        if csv.type is 'solution'
+          setData 'solution', csv.csv
+          $('.solution').html 'Got it.'
+        else if csv.type is 'responses'
+          setData 'responses', csv.csv
+          $('.responses').html 'Got it.'
+        runInputFiles finished
+
+      reader.readAsText file
+  else
+    finished?.call()
+
+returnResults = ->
+  pdfs_pages = getData 'pdfs_pages'
+  solution = getData 'solution'
+  responses = getData 'responses'
+
+  if solution && responses && pdfs_pages
+    $('.status').html 'Please download the results :]'
+    setData 'results', calcResults solution, responses
+
+    results = getData 'results'
+    for k of results
+      savePdf k, renderResults(k, results[k])
+  else
+    $('.status').html 'Awaiting more files...'
+
+
 __internal = {}
 setData = (k,v) ->
-  __internal[k] = _.clone v
+  __internal[k] = v
 
 getData = (k) ->
-  if __internal[k] then _.clone(__internal[k]) else null
+  __internal[k]
 
 solutionClass = 'solution'
 responsesClass = 'responses'
@@ -173,75 +227,12 @@ $(document).ready =>
 
     reader = new FileReader()
     if files.length
-      pdfs = _.filter files, (f) -> f.type.match /pdf/
-      other = _.filter files, (f) -> !f.type.match /pdf/
+      inputFiles = getData 'inputFiles'
+      inputFiles ?= []
+      run = !inputFiles.length
+      inputFiles = inputFiles.concat _.map files, (f) -> f
+      setData 'inputFiles', inputFiles
 
-      if pdfs.length
-        for pdf in pdfs
-          reader = new FileReader()
-          filename = parseResponseId pdf.name
-          console.log 'onload def'
-          reader.onload = ->
-            console.log "filename: #{filename}"
-            dataPdfs = getData 'pdfs'
-            dataPdfs ?= {}
-            console.log 'LEN: ' + @result?.length
-            dataPdfs[filename] = @result
-            setData 'pdfs', dataPdfs
-            slurpPDF filename, @result
-            console.log 'dataPdf: ' + JSON.stringify _.keys(dataPdfs), null, 2
-
-          # reader.onload = ((theFile) ->
-          #   filename = parseResponseId theFile.name
-          #   console.log 'HURKA: ' + @result?.length
-          #   (e) =>
-          #     dataPdfs = getData 'pdfs'
-          #     dataPdfs ?= {}
-          #     console.log 'LEN: ' + @result?.length
-          #     dataPdfs[filename] = @result
-          #     console.log 'dataPdf: ' + JSON.stringify _.keys(dataPdfs), null, 2
-          #     setData 'pdfs', dataPdfs
-          # )(pdf)
-
-          reader.readAsArrayBuffer pdf
-
-      if other.length
-        for o in other
-          reader = new FileReader()
-          reader.onload = ->
-            # console.log 'read ready: ' + event.target.result
-
-            csv = parse_csv event.target.result
-            if $tgt.hasClass solutionClass
-              setData 'solution', csv
-              $('.solution').html 'Got it.'
-            else if $tgt.hasClass responsesClass
-              setData 'responses', csv
-              $('.responses').html 'Got it.'
-
-            solution = getData 'solution'
-            responses = getData 'responses'
-
-            if solution && responses
-              setData 'results', calcResults solution, responses
-
-              results = getData 'results'
-              pdfs = getData 'pdfs'
-              for k of results
-                save = ->
-                  console.log 'save: ' + k
-                  savePdf k, renderResults(k, results[k])
-                console.log 'save for ' + k
-                console.log 'has pdf: ' + !!pdfs[k]
-                console.log 'pdfs: ' + JSON.stringify _.keys(pdfs), null, 2
-                savePdf k, renderResults(k, results[k])
-                # if pdfs?[k]
-                #   console.log 'slurpPDF: ' + k
-                #   # slurpPDF k, pdfs[k], save
-                #   slurpPDF k, pdfs[k]
-                # else
-                #   save()
-
-          reader.readAsText o
+      runInputFiles returnResults if run
 
     false

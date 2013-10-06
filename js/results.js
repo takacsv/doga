@@ -1,4 +1,4 @@
-var calcResults, getData, parseFieldName, parseResponseId, parse_csv, renderResults, responsesClass, savePdf, setData, slurpPDF, solutionClass, splitLine, transformResults, __internal, _renderPDFPage;
+var calcResults, getData, parseCSV, parseFieldName, parseResponseId, renderResults, responsesClass, returnResults, runInputFiles, savePdf, setData, slurpPDF, solutionClass, splitLine, transformResults, __internal, _renderPDFPage;
 var _this = this;
 
 parseFieldName = function(field) {
@@ -23,9 +23,10 @@ parseResponseId = function(id) {
   }
 };
 
-parse_csv = function(content) {
-  var f, field, fields, hdr_field, header, i, j, line, lines, ln_flds, resp_id, ret, solutions, _len, _len2, _len3;
+parseCSV = function(content) {
+  var csv, f, field, fields, hdr_field, header, i, j, line, lines, ln_flds, resp_id, ret, solutions, type, _len, _len2, _len3;
   ret = {};
+  type = null;
   lines = content != null ? content.split(/\r\n|\r|\n/g) : void 0;
   lines = _.filter(lines, function(l) {
     return l != null ? l.length : void 0;
@@ -34,7 +35,8 @@ parse_csv = function(content) {
     header = lines.shift();
     header = splitLine(header);
     fields = {};
-    if (lines.length === 1) {
+    if (lines.length === 1 && !lines[0].match(/formid/)) {
+      type = 'solution';
       solutions = splitLine(lines[0]);
       for (i = 0, _len = header.length; i < _len; i++) {
         field = header[i];
@@ -42,6 +44,7 @@ parse_csv = function(content) {
         ret[f] = solutions[i];
       }
     } else {
+      type = 'responses';
       for (i = 0, _len2 = lines.length; i < _len2; i++) {
         line = lines[i];
         ln_flds = splitLine(line);
@@ -60,7 +63,10 @@ parse_csv = function(content) {
       }
     }
   }
-  return ret;
+  return csv = {
+    type: type,
+    csv: ret
+  };
 };
 
 calcResults = function(sol, resp) {
@@ -182,18 +188,74 @@ slurpPDF = function(id, source, finished) {
   });
 };
 
+runInputFiles = function(finished) {
+  var file, filename, inputFiles, reader;
+  inputFiles = getData('inputFiles');
+  if (inputFiles.length) {
+    file = inputFiles.pop();
+    $('.status').html("Processing file '" + file.name + "' (" + inputFiles.length + " more left) ...");
+    if (file.type.match(/pdf/)) {
+      reader = new FileReader();
+      filename = parseResponseId(file.name);
+      reader.onload = function() {
+        var dataPdfs;
+        dataPdfs = getData('pdfs');
+        if (dataPdfs == null) dataPdfs = {};
+        dataPdfs[filename] = this.result;
+        setData('pdfs', dataPdfs);
+        return slurpPDF(filename, this.result, function() {
+          return runInputFiles(finished);
+        });
+      };
+      return reader.readAsArrayBuffer(file);
+    } else {
+      reader = new FileReader();
+      reader.onload = function() {
+        var csv;
+        csv = parseCSV(event.target.result);
+        if (csv.type === 'solution') {
+          setData('solution', csv.csv);
+          $('.solution').html('Got it.');
+        } else if (csv.type === 'responses') {
+          setData('responses', csv.csv);
+          $('.responses').html('Got it.');
+        }
+        return runInputFiles(finished);
+      };
+      return reader.readAsText(file);
+    }
+  } else {
+    return finished != null ? finished.call() : void 0;
+  }
+};
+
+returnResults = function() {
+  var k, pdfs_pages, responses, results, solution, _results;
+  pdfs_pages = getData('pdfs_pages');
+  solution = getData('solution');
+  responses = getData('responses');
+  if (solution && responses && pdfs_pages) {
+    $('.status').html('Please download the results :]');
+    setData('results', calcResults(solution, responses));
+    results = getData('results');
+    _results = [];
+    for (k in results) {
+      _results.push(savePdf(k, renderResults(k, results[k])));
+    }
+    return _results;
+  } else {
+    return $('.status').html('Awaiting more files...');
+  }
+};
+
 __internal = {};
 
 setData = function(k, v) {
-  return __internal[k] = _.clone(v);
+  return __internal[k] = v;
 };
 
 getData = function(k) {
-  if (__internal[k]) {
-    return _.clone(__internal[k]);
-  } else {
-    return null;
-  }
+  return __internal[k];
 };
 
 solutionClass = 'solution';
@@ -206,74 +268,19 @@ $(document).ready(function() {
     return false;
   });
   return $('.droparea').on('drop', function(e) {
-    var $tgt, filename, files, o, other, pdf, pdfs, reader, _i, _j, _len, _len2;
+    var $tgt, files, inputFiles, reader, run;
     files = e.target.files || e.originalEvent.dataTransfer.files;
     $tgt = $(e.target);
     reader = new FileReader();
     if (files.length) {
-      pdfs = _.filter(files, function(f) {
-        return f.type.match(/pdf/);
-      });
-      other = _.filter(files, function(f) {
-        return !f.type.match(/pdf/);
-      });
-      if (pdfs.length) {
-        for (_i = 0, _len = pdfs.length; _i < _len; _i++) {
-          pdf = pdfs[_i];
-          reader = new FileReader();
-          filename = parseResponseId(pdf.name);
-          console.log('onload def');
-          reader.onload = function() {
-            var dataPdfs, _ref;
-            console.log("filename: " + filename);
-            dataPdfs = getData('pdfs');
-            if (dataPdfs == null) dataPdfs = {};
-            console.log('LEN: ' + ((_ref = this.result) != null ? _ref.length : void 0));
-            dataPdfs[filename] = this.result;
-            setData('pdfs', dataPdfs);
-            slurpPDF(filename, this.result);
-            return console.log('dataPdf: ' + JSON.stringify(_.keys(dataPdfs), null, 2));
-          };
-          reader.readAsArrayBuffer(pdf);
-        }
-      }
-      if (other.length) {
-        for (_j = 0, _len2 = other.length; _j < _len2; _j++) {
-          o = other[_j];
-          reader = new FileReader();
-          reader.onload = function() {
-            var csv, k, responses, results, save, solution, _results;
-            csv = parse_csv(event.target.result);
-            if ($tgt.hasClass(solutionClass)) {
-              setData('solution', csv);
-              $('.solution').html('Got it.');
-            } else if ($tgt.hasClass(responsesClass)) {
-              setData('responses', csv);
-              $('.responses').html('Got it.');
-            }
-            solution = getData('solution');
-            responses = getData('responses');
-            if (solution && responses) {
-              setData('results', calcResults(solution, responses));
-              results = getData('results');
-              pdfs = getData('pdfs');
-              _results = [];
-              for (k in results) {
-                save = function() {
-                  console.log('save: ' + k);
-                  return savePdf(k, renderResults(k, results[k]));
-                };
-                console.log('save for ' + k);
-                console.log('has pdf: ' + !!pdfs[k]);
-                console.log('pdfs: ' + JSON.stringify(_.keys(pdfs), null, 2));
-                _results.push(savePdf(k, renderResults(k, results[k])));
-              }
-              return _results;
-            }
-          };
-          reader.readAsText(o);
-        }
-      }
+      inputFiles = getData('inputFiles');
+      if (inputFiles == null) inputFiles = [];
+      run = !inputFiles.length;
+      inputFiles = inputFiles.concat(_.map(files, function(f) {
+        return f;
+      }));
+      setData('inputFiles', inputFiles);
+      if (run) runInputFiles(returnResults);
     }
     return false;
   });

@@ -12,33 +12,40 @@
 
   <script src="js/results.js"></script>
   <style>
+    body {
+      color: whitesmoke;
+      text-align: center;
+      }
+
     .droparea {
-      border: 1px solid black;
-      width: 800px;
+      width: 100%;
+      height: 100%;
+      background-color: #f39c12;
+      padding-top: 10px;
+      }
+
+    .status {
+      width: 400px;
       margin: 0 auto;
-      height: 100px;
+      padding: 10px;
+      background-color: #2ecc71;
+      min-height: 20px;
       }
 
-    .solution, .responses {
-      height: 60px;
-      }
-
-    .tests, .tmp {
+    .tmp {
       display: none;
       }
 
     .canvas {
       position: absolute;
       top: 0;
-      right: -10000px;
+      left: -10000px;
       }
   </style>
 </head>
 <body>
-Here comes the show. 
-<div class="droparea solution">Drop solution csv here</div>
-<div class="droparea responses">Drop responses csv here</div>
-<div class="droparea tests">Drop filled out test pdfs here</div>
+<div class="status"></div>
+<div class="droparea">Drop filled out test pdfs, solution csv and responses csv here</div>
 <div class="tmp"></div>
 
 <canvas class="canvas"></canvas>
