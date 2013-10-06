@@ -1,4 +1,4 @@
-var calcResults, getData, parseCSV, parseFieldName, parseResponseId, renderResults, responsesClass, returnResults, runInputFiles, savePdf, setData, slurpPDF, solutionClass, splitLine, transformResults, __internal, _renderPDFPage;
+var calcResults, genCSV, getData, getGrade, parseCSV, parseFieldName, parseResponseId, renderResults, responsesClass, returnResults, runInputFiles, savePdf, setData, slurpPDF, solutionClass, splitLine, transformResults, __internal, _renderPDFPage;
 var _this = this;
 
 parseFieldName = function(field) {
@@ -24,7 +24,7 @@ parseResponseId = function(id) {
 };
 
 parseCSV = function(content) {
-  var csv, f, field, fields, hdr_field, header, i, j, line, lines, ln_flds, resp_id, ret, solutions, type, _len, _len2, _len3;
+  var csv, f, field, fields, formid, hdr_field, header, i, j, line, lines, ln_flds, resp_id, ret, solutions, type, _len, _len2, _len3;
   ret = {};
   type = null;
   lines = content != null ? content.split(/\r\n|\r|\n/g) : void 0;
@@ -33,9 +33,10 @@ parseCSV = function(content) {
   });
   if (lines.length) {
     header = lines.shift();
+    formid = header.match(/formid/);
     header = splitLine(header);
     fields = {};
-    if (lines.length === 1 && !lines[0].match(/formid/)) {
+    if (lines.length === 1 && !formid) {
       type = 'solution';
       solutions = splitLine(lines[0]);
       for (i = 0, _len = header.length; i < _len; i++) {
@@ -69,6 +70,13 @@ parseCSV = function(content) {
   };
 };
 
+getGrade = function(achieved, all) {
+  var grade, pct;
+  if (!all) all = 1;
+  pct = parseInt(achieved) / parseInt(all);
+  return grade = pct < 0.5 ? 1 : pct < 0.6 ? 2 : pct < 0.7 ? 3 : pct < 0.8 ? 4 : 5;
+};
+
 calcResults = function(sol, resp) {
   var r, ret, s;
   ret = {};
@@ -98,7 +106,8 @@ transformResults = function(result) {
         i: i + 1
       };
     }),
-    correct: correct.length
+    correct: correct.length,
+    grade: getGrade(correct.length, quests.length)
   };
   return ret;
 };
@@ -109,7 +118,8 @@ renderResults = function(id, results) {
   data = {
     id: id,
     results: tResults.quests,
-    correct: tResults.correct
+    correct: tResults.correct,
+    grade: tResults.grade
   };
   tpl = Hogan.compile('<div>\
                          <div>ID: {{id}} [{{correct}} pt(s)]</div>\
@@ -120,11 +130,24 @@ renderResults = function(id, results) {
                            </ul>\
                            <b>\
                              <div>Pontszam: {{correct}}</div>\
-                             </div>Ertekeles:<div>\
+                             </div>Erdemjegy: {{grade}}<div>\
                            </b>\
                          </div>\
                        </div>');
   return tpl.render(data);
+};
+
+genCSV = function(results) {
+  var blob, csv, k, tResults;
+  csv = ['id,pts,grade'];
+  for (k in results) {
+    tResults = transformResults(results[k]);
+    csv.push([k, tResults.correct, tResults.grade].join(','));
+  }
+  blob = new Blob([csv.join("\n")], {
+    type: 'text/csv;charset=utf-8'
+  });
+  return saveAs(blob, 'results.csv');
 };
 
 savePdf = function(name, content) {
@@ -230,7 +253,7 @@ runInputFiles = function(finished) {
 };
 
 returnResults = function() {
-  var k, pdfs_pages, responses, results, solution, _results;
+  var k, pdfs_pages, responses, results, solution;
   pdfs_pages = getData('pdfs_pages');
   solution = getData('solution');
   responses = getData('responses');
@@ -238,11 +261,10 @@ returnResults = function() {
     $('.status').html('Please download the results :]');
     setData('results', calcResults(solution, responses));
     results = getData('results');
-    _results = [];
     for (k in results) {
-      _results.push(savePdf(k, renderResults(k, results[k])));
+      savePdf(k, renderResults(k, results[k]));
     }
-    return _results;
+    return genCSV(results);
   } else {
     return $('.status').html('Awaiting more files...');
   }

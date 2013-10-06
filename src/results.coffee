@@ -21,10 +21,11 @@ parseCSV = (content) ->
 
   if lines.length
     header = lines.shift()
+    formid = header.match /formid/
     header = splitLine header
 
     fields = {}
-    if lines.length == 1 && !lines[0].match /formid/
+    if lines.length == 1 && !formid
       # this must be a solution csv
       type = 'solution'
       solutions = splitLine lines[0]
@@ -53,6 +54,21 @@ parseCSV = (content) ->
     type : type
     csv  : ret
 
+getGrade = (achieved, all) ->
+  all = 1 unless all
+  pct = parseInt(achieved) / parseInt(all)
+
+  grade = if pct < 0.5
+    1
+  else if pct < 0.6
+    2
+  else if pct < 0.7
+    3
+  else if pct < 0.8
+    4
+  else
+    5
+
 calcResults = (sol, resp) ->
   ret = {}
 
@@ -80,6 +96,7 @@ transformResults = (result) ->
   ret =
     quests  : _.map(quests, (q, i) -> { q: q, i: i+1 })
     correct : correct.length
+    grade   : getGrade correct.length, quests.length
 
   # console.log 'transformResults: ' + JSON.stringify ret, null, 2
 
@@ -91,6 +108,7 @@ renderResults = (id, results) ->
     id      : id
     results : tResults.quests
     correct : tResults.correct
+    grade   : tResults.grade
 
   tpl = Hogan.compile '<div>
                          <div>ID: {{id}} [{{correct}} pt(s)]</div>
@@ -101,11 +119,20 @@ renderResults = (id, results) ->
                            </ul>
                            <b>
                              <div>Pontszam: {{correct}}</div>
-                             </div>Ertekeles:<div>
+                             </div>Erdemjegy: {{grade}}<div>
                            </b>
                          </div>
                        </div>'
   tpl.render data
+
+genCSV = (results) ->
+  csv = [ 'id,pts,grade' ]
+  for k of results
+    tResults = transformResults results[k]
+    csv.push [ k, tResults.correct, tResults.grade].join ','
+
+  blob = new Blob [csv.join("\n")], type: 'text/csv;charset=utf-8'
+  saveAs blob, 'results.csv'
 
 savePdf = (name, content) ->
   $tmp = $('.tmp')
@@ -202,6 +229,7 @@ returnResults = ->
     results = getData 'results'
     for k of results
       savePdf k, renderResults(k, results[k])
+    genCSV results
   else
     $('.status').html 'Awaiting more files...'
 
