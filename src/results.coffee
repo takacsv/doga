@@ -115,7 +115,7 @@ renderResults = (id, results) ->
                            <ul>
                            {{#results}}
                              <li>{{i}}.: <b>{{q}}</b> pont</li>
-                           {{/results}} 
+                           {{/results}}
                            </ul>
                            <b>
                              <div>Pontszam: {{correct}}</div>
@@ -145,11 +145,11 @@ savePdf = (name, content) ->
       doc.addImage page, 'JPEG', 0, 0
       doc.addPage()
 
-  doc.fromHTML($tmp.get(0), 15, 15,
-    width           : 'auto',
-    elementHandlers : -> true)
+    doc.fromHTML($tmp.get(0), 15, 15,
+      width           : 'auto',
+      elementHandlers : -> true)
 
-  doc.save name + '.pdf'
+    doc.save name + '.pdf'
 
 _renderPDFPage = (id, pdf, num, finished) ->
   if pdf.numPages < num
