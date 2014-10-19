@@ -236,6 +236,7 @@ slurpPDF = function(id, source, finished) {
 runInputFiles = function(finished) {
   var file, filename, inputFiles, reader;
 
+  console.log('runInputFiles ' + (new Date()).getTime());
   inputFiles = getData('inputFiles');
   if (inputFiles.length) {
     file = inputFiles.pop();
@@ -275,6 +276,7 @@ runInputFiles = function(finished) {
       return reader.readAsText(file);
     }
   } else {
+    console.log('inputFilesDone');
     return finished != null ? finished.call() : void 0;
   }
 };
@@ -290,6 +292,7 @@ returnResults = function() {
     setData('results', calcResults(solution, responses));
     results = getData('results');
     for (k in results) {
+      console.log('returnResults: ' + k);
       savePdf(k, renderResults(k, results[k]));
     }
     return genCSV(results);

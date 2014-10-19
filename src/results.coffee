@@ -185,6 +185,7 @@ slurpPDF = (id, source, finished) ->
 
 
 runInputFiles = (finished) ->
+  console.log 'runInputFiles ' + (new Date()).getTime()
   inputFiles = getData 'inputFiles'
   if inputFiles.length
     file = inputFiles.pop()
@@ -215,6 +216,7 @@ runInputFiles = (finished) ->
 
       reader.readAsText file
   else
+    console.log 'inputFilesDone'
     finished?.call()
 
 returnResults = ->
@@ -228,6 +230,7 @@ returnResults = ->
 
     results = getData 'results'
     for k of results
+      console.log 'returnResults: ' + k
       savePdf k, renderResults(k, results[k])
     genCSV results
   else
