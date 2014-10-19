@@ -135,11 +135,11 @@ renderResults = function(id, results) {
   };
   tpl = Hogan.compile('<div>\
                          <div>ID: {{id}} [{{correct}} pt(s)]</div>\
-                           <ul>\
+                           <dl>\
                            {{#results}}\
-                             <li>{{i}}.: <b>{{q}}</b> pont</li>\
+                             <dt>{{i}}.: <b>{{q}}</b> pont</dt>\
                            {{/results}}\
-                           </ul>\
+                           </dl>\
                            <b>\
                              <div>Pontszam: {{correct}}</div>\
                              </div>Erdemjegy: {{grade}}<div>\
